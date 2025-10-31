@@ -1,5 +1,5 @@
 # Real-time Hand Gesture Recognition
-# This notebook loads a pre-trained model and runs real-time hand gesture recognition using your webcam.
+# This Code loads a pre-trained model and runs real-time hand gesture recognition using your webcam.
 
 
 # Import Required Libraries
