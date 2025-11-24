@@ -13,11 +13,11 @@ import pickle
 # Load Pre-trained Model and Label Encoder
 
 # Load the trained model
-model = load_model('best_model.h5')
+# model = load_model('best_model.h5')
 
 # Load the label encoder
-with open('hand_gesture_model.pkl', 'rb') as f:
-    _, le = pickle.load(f)  # We only need the label encoder, not the model
+with open('hand_gesture_norm_model.pkl', 'rb') as f:
+    model, le = pickle.load(f)  # We only need the label encoder, not the model
 
 
 # Setup MediaPipe Configuration
