@@ -5,7 +5,7 @@ import pyautogui
 import time
 
 class GestureActions:
-    def __init__(self, cooldown=0.5):
+    def __init__(self, cooldown=0.8):
         """
         cooldown: Minimum time (in seconds) between repeated actions
         """
