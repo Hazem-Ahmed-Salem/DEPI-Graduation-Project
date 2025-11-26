@@ -141,6 +141,25 @@ def smooth_prediction(pred_vector, hand_id, history, queue_len=QUEUE_LENGTH):
         history[hand_id].pop(0)
     return np.mean(history[hand_id], axis=0)
 
+def is_palm_facing_camera(landmarks, side="Right"):
+    """
+    Heuristic to check if palm is facing camera.
+    Assumes MIRRORED image (standard webcam view).
+    
+    Right Hand (Mirrored): Index Knuckle (5) should be to the LEFT of Pinky Knuckle (17) -> x5 < x17
+    Left Hand (Mirrored): Index Knuckle (5) should be to the RIGHT of Pinky Knuckle (17) -> x5 > x17
+    """
+    # Landmarks: 5=Index MCP, 17=Pinky MCP
+    index_mcp_x = landmarks[5].x
+    pinky_mcp_x = landmarks[17].x
+    
+    if side == "Right":
+        # In mirrored view, Right hand palm facing means Index is 'left' of Pinky
+        return index_mcp_x < pinky_mcp_x
+    else:
+        # Left hand palm facing means Index is 'right' of Pinky
+        return index_mcp_x > pinky_mcp_x
+
 # ---------------- Overlay helper ----------------
 def draw_overlay(frame, text_lines, position="top-left"):
     h, w = frame.shape[:2]
@@ -195,6 +214,15 @@ def main(args):
         raise RuntimeError(f"Cannot open camera id={args.camera}")
 
     prediction_history: Dict[str, list] = {}
+
+    # State for gesture timing logic
+    gesture_state = {
+        "current": None,
+        "start_time": 0.0,
+        "last_action": 0.0,
+        "triggered_once": False
+    }
+
     try:
         print("Starting camera. Press ESC to quit.")
         while True:
@@ -210,7 +238,7 @@ def main(args):
             overlay_text = []
 
             if results.multi_hand_landmarks:
-                for i, hand_landmarks in enumerate(results.multi_hand_landmarks):
+                for i, hand_landmarks in enumerate(results.multi_hand_landmarks[:1]):
                     # determine handedness by location heuristics or media pipe handedness container
                     # If the original file used results.multi_handedness, keep that; otherwise fall back to index
                     side = "Right"  # default
@@ -313,40 +341,61 @@ def main(args):
                         except Exception:
                             index_x, index_y = None, None
 
-                        # Continuous actions when confidence high
-                        if conf_pct > 70:
-                            if gesture == "06_index":
-                                # Move cursor
+                        # Determine active gesture based on confidence
+                        # Using 90% threshold (CONF_THRESH) to filter weak detections
+                        # AND check if palm is facing camera (unless it's a fist)
+                        palm_facing = is_palm_facing_camera(hand_landmarks.landmark, side)
+                        is_fist = gesture in ["03_fist", "04_fist_moved", "05_thumb", "08_palm_moved", "10_down", "06_index", "09_c", "02_l", "07_ok", "01_palm"]
+                        
+                        if conf_pct > 90 and (palm_facing or is_fist):
+                            active_gesture = gesture
+                        else:
+                            active_gesture = None
+
+                        # State Management
+                        if active_gesture != gesture_state["current"]:
+                            gesture_state["current"] = active_gesture
+                            gesture_state["start_time"] = time.time()
+                            gesture_state["last_action"] = 0.0
+                            gesture_state["triggered_once"] = False
+
+                        if active_gesture:
+                            duration = time.time() - gesture_state["start_time"]
+
+                            # 1. Instant Actions (Cursor) - No delay
+                            if active_gesture == "06_index":
                                 try:
                                     actions.move_cursor(index_x, index_y)
                                 except Exception as e:
                                     print(f"Actions.move_cursor failed: {e}")
-
-                            if gesture == "09_c":
-                                # drag gesture in original file -> pass drag=True
+                            
+                            elif active_gesture == "09_c":
                                 try:
                                     actions.move_cursor(index_x, index_y, drag=True)
                                 except Exception as e:
                                     print(f"Actions.move_cursor(drag) failed: {e}")
 
-                            # Add observed continuous gestures (scroll)
-                            if gesture == "02_l":
-                                try:
-                                    actions.scroll_up()
-                                except Exception as e:
-                                    print(f"Actions.scroll_up failed: {e}")
-                            if gesture == "07_ok":
-                                try:
-                                    actions.scroll_down()
-                                except Exception as e:
-                                    print(f"Actions.scroll_down failed: {e}")
+                            # 2. Delayed/Repeated Actions
+                            else:
+                                should_execute = False
 
-                        # One-time actions (trigger on detection)
-                        if gesture in ["01_palm", "08_palm_moved", "03_fist", "04_fist_moved", "05_thumb", "10_down"]:
-                            try:
-                                actions.perform_action(gesture)
-                            except Exception as e:
-                                print(f"[WARN] actions.perform_action failed: {e}")
+                                # Phase 1: Initial Trigger after .8s
+                                if duration >= .8 and not gesture_state["triggered_once"]:
+                                    should_execute = True
+                                    gesture_state["triggered_once"] = True
+                                    gesture_state["last_action"] = time.time()
+
+                                # Phase 2: Repeat if held > 2.5s, every 1.5s
+                                elif duration >= 2.5:
+                                    if time.time() - gesture_state["last_action"] >= 1.5:
+                                        should_execute = True
+                                        gesture_state["last_action"] = time.time()
+
+                                if should_execute:
+                                    try:
+                                        actions.perform_action(active_gesture, x=index_x, y=index_y)
+                                    except Exception as e:
+                                        print(f"[WARN] actions.perform_action failed: {e}")
 
                     # append to overlay
                     overlay_text.append(f"{side}: {gesture} ({conf_pct:.1f}%)")

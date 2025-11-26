@@ -5,7 +5,7 @@ import pyautogui
 import time
 
 class GestureActions:
-    def __init__(self, cooldown=0.8):
+    def __init__(self, cooldown=0.5):
         """
         cooldown: Minimum time (in seconds) between repeated actions
         """
@@ -34,17 +34,17 @@ class GestureActions:
         if self._can_execute("08_palm_moved"):
             pyautogui.press("left")
 
-    def left_click(self):
+    def play_pause(self):
         if self._can_execute("03_fist"):
-            pyautogui.click()
+            pyautogui.press("playpause")
 
-    def double_click(self):
+    def next_song(self):
         if self._can_execute("04_fist_moved"):
-            pyautogui.doubleClick()
+            pyautogui.press("nexttrack")
 
-    def right_click(self):
+    def previous_song(self):
         if self._can_execute("05_thumb"):
-            pyautogui.click(button="right")
+            pyautogui.press("prevtrack")
 
     def close_window(self):
         if self._can_execute("10_down"):
@@ -116,11 +116,11 @@ class GestureActions:
         elif gesture == "08_palm_moved":
             self.previous_slide()
         elif gesture == "03_fist":
-            self.left_click()
+            self.play_pause()
         elif gesture == "04_fist_moved":
-            self.double_click()
+            self.next_song()
         elif gesture == "05_thumb":
-            self.right_click()
+            self.previous_song()
         elif gesture == "10_down":
             self.close_window()
         elif gesture in ["06_index", "09_c"]:
