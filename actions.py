@@ -50,34 +50,6 @@ class GestureActions:
         if self._can_execute("10_down"):
             pyautogui.hotkey("alt", "f4")
 
-    # ---------------- CONTINUOUS ACTIONS ----------------
-    # def move_cursor(self, x, y, gesture=None, smooth=True):
-    #     """
-    #     Move the mouse pointer.
-    #     x, y: normalized coordinates (0 to 1)
-    #     gesture: optional, if C gesture, hold mouse down
-    #     smooth: whether to move smoothly to avoid jitter
-    #     """
-    #     screen_width, screen_height = pyautogui.size()
-    #     target_x = int(x * screen_width)
-    #     target_y = int(y * screen_height)
-
-    #     # If C gesture, start dragging
-    #     if gesture == "09_c":
-    #         if not self.dragging:
-    #             pyautogui.mouseDown()  # Start holding
-    #             self.dragging = True
-    #     else:
-    #         # If previously dragging, release
-    #         if self.dragging:
-    #             pyautogui.mouseUp()
-    #             self.dragging = False
-
-    #     if smooth:
-    #         pyautogui.moveTo(target_x, target_y, duration=0.1)
-    #     else:
-    #         pyautogui.moveTo(target_x, target_y, duration=0)
-
 
     def move_cursor(self, x, y, smooth=True, drag=False):
         """
@@ -100,10 +72,10 @@ class GestureActions:
 
 
     def scroll_up(self):
-        pyautogui.scroll(300)  # Scroll up
+        pyautogui.scroll(800)  # Scroll up
      
     def scroll_down(self):
-        pyautogui.scroll(-300)  # Scroll down
+        pyautogui.scroll(-800)  # Scroll down
 
     # ---------------- MAPPING HELPER ----------------
     def perform_action(self, gesture, **kwargs):
