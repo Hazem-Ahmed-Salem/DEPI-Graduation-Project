@@ -3,7 +3,6 @@ import argparse
 import pickle
 import time
 from typing import Dict
-
 import cv2
 import numpy as np
 import mediapipe as mp
@@ -144,7 +143,6 @@ def smooth_prediction(pred_vector, hand_id, history, queue_len=QUEUE_LENGTH):
 def is_palm_facing_camera(landmarks, side="Right"):
     """
     Heuristic to check if palm is facing camera.
-    Assumes MIRRORED image (standard webcam view).
     
     Right Hand (Mirrored): Index Knuckle (5) should be to the LEFT of Pinky Knuckle (17) -> x5 < x17
     Left Hand (Mirrored): Index Knuckle (5) should be to the RIGHT of Pinky Knuckle (17) -> x5 > x17
