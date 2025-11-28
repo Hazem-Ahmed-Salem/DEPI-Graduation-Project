@@ -3,26 +3,26 @@ import os
 import pickle
 import time
 from typing import List, Tuple
-
 import cv2 as cv
 import numpy as np
 import streamlit as st
 import mediapipe as mp
 from PIL import Image, ImageDraw, ImageFont
+from monitoring_module import check_model_performance
 
 # ---------------- Config ----------------
-MODEL_PICKLE = "hand_gesture_norm_model.pkl"   # your model pickle (must contain model and le)
-SCALER_PICKLE = "scaler.pkl"              # optional
+MODEL_PICKLE = "hand_gesture_norm_model.pkl" # your model pickle (must contain model and le)
+SCALER_PICKLE = "scaler.pkl" # optional
 CAMERA_ID = 0
 
 QUEUE_LENGTH = 5
-CONF_THRESH = 0.60   # threshold to show label (0..1)
+CONF_THRESH = 0.60 # threshold to show label (0..1)
 
 # Preprocessing (must match training)
 ORIGIN_IDX = 0
 SCALE_METHOD = "max_dist"
 APPLY_ROTATION = True
-MIRROR_LEFT = False  # set True only if you mirrored left-hand training data
+MIRROR_LEFT = False # set True only if you mirrored left-hand training data
 
 # UI appearance
 CARD_BG = (15, 20, 25, 200)
@@ -214,7 +214,7 @@ except FileNotFoundError as e:
 mp_hands = mp.solutions.hands
 mp_draw = mp.solutions.drawing_utils
 hands = mp_hands.Hands(static_image_mode=False, max_num_hands=2,
-                       min_detection_confidence=0.6, min_tracking_confidence=0.5)
+                        min_detection_confidence=0.6, min_tracking_confidence=0.5)
 
 history = {}
 
@@ -272,7 +272,7 @@ try:
 
         if results.multi_hand_landmarks:
             for i, (lm_list, handedness) in enumerate(zip(results.multi_hand_landmarks, results.multi_handedness)):
-                side = handedness.classification[0].label  # 'Left' or 'Right'
+                side = handedness.classification[0].label # 'Left' or 'Right'
                 hand_id = f"{side}_{i}"
 
                 # flatten landmarks x,y,z
@@ -301,9 +301,14 @@ try:
 
                 # predict
                 try:
+                    # Start Time
+                    t_start = time.time()
                     raw = model.predict(inp, verbose=0)
+                    # End Time with ms
+                    inference_time_ms = (time.time() - t_start) * 1000
                 except Exception as e:
                     st.warning(f"Prediction error: {e}")
+                    inference_time_ms = 0.0
                     continue
 
                 pv = raw[0]
@@ -312,13 +317,22 @@ try:
 
                 smooth = smooth_prediction(pv, hand_id, history)
                 idx = int(np.argmax(smooth))
-                conf = float(smooth[idx]) * 100.0
+                conf_ratio = float(smooth[idx])
+                conf = conf_ratio * 100.0
 
                 # decode label using the label encoder that came from the model pickle
                 try:
                     label_name = le.inverse_transform([idx])[0]
                 except Exception:
                     label_name = str(idx)
+
+                check_model_performance(
+                    conf_ratio,           # Confidence Value
+                    label_name,           # Gesture Name
+                    side,                 # Which hand (right/left)
+                    MODEL_PICKLE,         # Model Name
+                    inference_time_ms     # Prediction Time
+                )
 
                 # top-3
                 sorted_idx = np.argsort(smooth)[-3:][::-1]
