@@ -11,14 +11,14 @@ from PIL import Image, ImageDraw, ImageFont
 from monitoring_module import check_model_performance
 
 # ---------------- Config ----------------
-MODEL_PICKLE = "hand_gesture_norm_model.pkl" # your model pickle (must contain model and le)
-SCALER_PICKLE = "scaler.pkl" # optional
+MODEL_PICKLE = "hand_gesture_norm_model.pkl" # Model pickle (must contain model and le)
+SCALER_PICKLE = "scaler.pkl"
 CAMERA_ID = 0
 
 QUEUE_LENGTH = 5
 CONF_THRESH = 0.60 # threshold to show label (0..1)
 
-# Preprocessing (must match training)
+# Preprocessing
 ORIGIN_IDX = 0
 SCALE_METHOD = "max_dist"
 APPLY_ROTATION = True
@@ -59,12 +59,9 @@ def load_resources(model_path: str = MODEL_PICKLE, scaler_path: str = SCALER_PIC
         elif "label_encoder" in obj:
             le = obj["label_encoder"]
     else:
-        # maybe the pickle is an sklearn Pipeline with attributes? try attribute access (best-effort)
         model = obj
-        # no way to reliably find le if not explicitly included
 
     if le is None:
-        # Fail intentionally: user requested that `le` be packed with the model.
         raise FileNotFoundError(
             "Label encoder not found inside the model pickle. Please pack the label encoder with the model "
             "(e.g. `pickle.dump((model, le), f)` or `pickle.dump({'model':model,'le':le}, f)`)."
