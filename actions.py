@@ -50,6 +50,10 @@ class GestureActions:
         if self._can_execute("10_down"):
             pyautogui.hotkey("alt", "f4")
 
+    def open_slide_show(self):
+        if self._can_execute("09_c"):
+            pyautogui.hotkey("shift", "f5")        
+
 
     def move_cursor(self, x, y, smooth=True, drag=False):
         """
@@ -95,10 +99,12 @@ class GestureActions:
             self.previous_song()
         elif gesture == "10_down":
             self.close_window()
-        elif gesture in ["06_index", "09_c"]:
+        elif gesture in ["06_index"]:
             x, y = kwargs.get("x", 0.5), kwargs.get("y", 0.5)
             self.move_cursor(x, y, gesture=gesture)
         elif gesture == "02_l":
             self.scroll_up()
         elif gesture == "07_ok":
             self.scroll_down()
+        elif gesture == "09_c":
+            self.open_slide_show()
