@@ -56,20 +56,20 @@ def load_resources(model_path: str = DEFAULT_MODEL_PICKLE, scaler_path: str = DE
             print(f"pickle load failed for {model_path}: {e}")
             model = None
 
-    # check for .h5 file
-    if model is None and os.path.exists(model_path) and model_path.lower().endswith(".h5") and keras_load_model:
-        try:
-            model = keras_load_model(model_path)
-            print(f"Loaded Keras model from {model_path}")
-        except Exception as e:
-            print(f"Failed to load Keras model from {model_path}: {e}")
+    # # check for .h5 file
+    # if model is None and os.path.exists(model_path) and model_path.lower().endswith(".h5") and keras_load_model:
+    #     try:
+    #         model = keras_load_model(model_path)
+    #         print(f"Loaded Keras model from {model_path}")
+    #     except Exception as e:
+    #         print(f"Failed to load Keras model from {model_path}: {e}")
 
-    if model is None and os.path.exists("best_model.h5") and keras_load_model:
-        try:
-            model = keras_load_model("best_model.h5")
-            print("Loaded Keras model from best_model.h5")
-        except Exception:
-            pass
+    # if model is None and os.path.exists("best_model.h5") and keras_load_model:
+    #     try:
+    #         model = keras_load_model("best_model.h5")
+    #         print("Loaded Keras model from best_model.h5")
+    #     except Exception:
+    #         pass
 
     if le is None:
         possible_le = ["le.pkl", "label_encoder.pkl", "labels.pkl"]
