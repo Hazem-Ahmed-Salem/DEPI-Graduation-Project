@@ -9,6 +9,7 @@ import streamlit as st
 import mediapipe as mp
 from PIL import Image, ImageDraw, ImageFont
 from monitoring_module import check_model_performance
+from actions import GestureActions
 
 # ---------------- Config ----------------
 MODEL_PICKLE = "hand_gesture_norm_model.pkl" # Model pickle (must contain model and le)
@@ -163,6 +164,25 @@ def draw_label_card(frame_rgb: np.ndarray, title: str, subtitle: str, top3: List
 
     return np.array(pil)
 
+def is_palm_facing_camera(landmarks, side="Right"):
+    """
+    Heuristic to check if palm is facing camera.
+    
+    Right Hand (Mirrored): Index Knuckle (5) should be to the LEFT of Pinky Knuckle (17) -> x5 < x17
+    Left Hand (Mirrored): Index Knuckle (5) should be to the RIGHT of Pinky Knuckle (17) -> x5 > x17
+    """
+    # Landmarks: 5=Index MCP, 17=Pinky MCP
+    index_mcp_x = landmarks[5].x
+    pinky_mcp_x = landmarks[17].x
+    
+    if side == "Right":
+        # In mirrored view, Right hand palm facing means Index is 'left' of Pinky
+        return index_mcp_x < pinky_mcp_x
+    else:
+        # Left hand palm facing means Index is 'right' of Pinky
+        return index_mcp_x > pinky_mcp_x
+
+
 # ---------------- UI ----------------
 st.set_page_config(page_title="Hand Gesture (cached loader)", layout="wide")
 st.markdown(
@@ -206,6 +226,17 @@ try:
 except FileNotFoundError as e:
     st.error(str(e))
     st.stop()
+
+actions = None
+if GestureActions is not None:
+    try:
+        actions = GestureActions()
+    except Exception as e:
+        print(f"GestureActions() instantiation failed: {e}")
+        actions = None
+else:
+    print("Actions.GestureActions is not available.")
+
 
 # Mediapipe init
 mp_hands = mp.solutions.hands
@@ -251,6 +282,14 @@ def update_info(model_name, right_info, left_info):
         left_slot.markdown("**Left:** —")
         left_top3.markdown("")
 
+# State for gesture timing logic
+gesture_state = {
+    "current": None,
+    "start_time": 0.0,
+    "last_action": 0.0,
+    "triggered_once": False
+}
+
 # ---------------- Main loop ----------------
 try:
     while st.session_state.running:
@@ -268,13 +307,20 @@ try:
         left_display = None
 
         if results.multi_hand_landmarks:
-            for i, (lm_list, handedness) in enumerate(zip(results.multi_hand_landmarks, results.multi_handedness)):
-                side = handedness.classification[0].label # 'Left' or 'Right'
+            for i, hand_landmarks in enumerate(results.multi_hand_landmarks[:1]):
+                # determine handedness safely
+                side = "Right"
+                if hasattr(results, "multi_handedness") and results.multi_handedness:
+                    try:
+                        side = results.multi_handedness[i].classification[0].label
+                    except Exception:
+                        side = "Right"
+                        
                 hand_id = f"{side}_{i}"
 
                 # flatten landmarks x,y,z
                 pts = []
-                for lm in lm_list.landmark:
+                for lm in hand_landmarks.landmark:
                     pts.extend([lm.x, lm.y, lm.z])
                 pts = np.array(pts, dtype=np.float32)
 
@@ -314,6 +360,7 @@ try:
 
                 smooth = smooth_prediction(pv, hand_id, history)
                 idx = int(np.argmax(smooth))
+                conf_pct = float(smooth[idx] * 100.0)
                 conf_ratio = float(smooth[idx])
                 conf = conf_ratio * 100.0
 
@@ -322,6 +369,14 @@ try:
                     label_name = le.inverse_transform([idx])[0]
                 except Exception:
                     label_name = str(idx)
+                    
+                try:
+                    if le is not None:
+                        gesture = le.inverse_transform([idx])[0]
+                    else:
+                        gesture = str(idx)
+                except Exception:
+                    gesture = str(idx)
 
                 check_model_performance(
                     conf_ratio,           # Confidence Value
@@ -332,6 +387,7 @@ try:
                 )
 
                 # top-3
+                mp_draw.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
                 sorted_idx = np.argsort(smooth)[-3:][::-1]
                 top3 = []
                 for si in sorted_idx:
@@ -345,6 +401,63 @@ try:
                     right_display = (f"{side}: {label_name}", conf, top3)
                 if side.lower() == "left" and left_display is None:
                     left_display = (f"{side}: {label_name}", conf, top3)
+                if actions is not None:
+                    try:
+                        # read index tip coords to pass to cursor movement if needed
+                        index_tip = hand_landmarks.landmark[8]
+                        index_x, index_y = index_tip.x, index_tip.y
+                    except Exception:
+                        index_x, index_y = None, None
+
+                    # Determine active gesture based on confidence
+                    # Using 90% threshold (CONF_THRESH) to filter weak detections
+                    # AND check if palm is facing camera (unless it's a fist)
+                    palm_facing = is_palm_facing_camera(hand_landmarks.landmark, side)
+                    is_fist = gesture in ["03_fist", "04_fist_moved", "05_thumb", "08_palm_moved", "10_down", "06_index", "09_c", "02_l", "07_ok", "01_palm"]
+                    
+                    if conf_pct > 90 and (palm_facing or is_fist):
+                        active_gesture = gesture
+                    else:
+                        active_gesture = None
+
+                    # State Management
+                    if active_gesture != gesture_state["current"]:
+                        gesture_state["current"] = active_gesture
+                        gesture_state["start_time"] = time.time()
+                        gesture_state["last_action"] = 0.0
+                        gesture_state["triggered_once"] = False
+
+                    if active_gesture:
+                        duration = time.time() - gesture_state["start_time"]
+
+                        # 1. Instant Actions (Cursor) - No delay
+                        if active_gesture == "06_index":
+                            try:
+                                actions.move_cursor(index_x, index_y)
+                            except Exception as e:
+                                print(f"Actions.move_cursor failed: {e}")
+
+
+                        # 2. Delayed/Repeated Actions
+                        else:
+                            should_execute = False
+                        # Phase 1: Initial Trigger after .8s
+                            if duration >= .8 and not gesture_state["triggered_once"]:
+                                should_execute = True
+                                gesture_state["triggered_once"] = True
+                                gesture_state["last_action"] = time.time()
+
+                            # Phase 2: Repeat if held > 2.5s, every 1.5s
+                            elif duration >= 2.5:
+                                if time.time() - gesture_state["last_action"] >= 1.5:
+                                    should_execute = True
+                                    gesture_state["last_action"] = time.time()
+
+                            if should_execute:
+                                try:
+                                    actions.perform_action(active_gesture, x=index_x, y=index_y)
+                                except Exception as e:
+                                    print(f"[WARN] actions.perform_action failed: {e}")
 
         # draw cards
         frame_out = frame_rgb.copy()
