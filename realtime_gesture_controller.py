@@ -336,24 +336,7 @@ def main(args):
                                     actions.move_cursor(index_x, index_y)
                                 except Exception as e:
                                     print(f"Actions.move_cursor failed: {e}")
-                            
-                            elif active_gesture == "09_c":
-                                try:
-                                    actions.open_slide_show()
-                                except Exception as e:
-                                    print(f"Actions.open_slide_show failed: {e}")
 
-                            elif active_gesture == "02_l":
-                                try:
-                                    actions.scroll_up()
-                                except Exception as e:
-                                    print(f"Actions.scroll up failed: {e}")
-
-                            elif active_gesture == "07_ok":
-                                try:
-                                    actions.scroll_down()
-                                except Exception as e:
-                                    print(f"Actions.scroll down failed: {e}")
 
                             # 2. Delayed/Repeated Actions
                             else:
